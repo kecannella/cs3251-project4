@@ -4,5 +4,11 @@
     <string name="app_name">ClientApp</string>
     <string name="action_settings">Settings</string>
     <string name="hello_world">Hello world!</string>
+    <string name="list_command">LIST</string>
+    <string name="diff_command">DIFF</string>
+    <string name="pull_command">PULL</string>
+    <string name="cap_command">CAP</string>
+    <string name="leave_command">LEAVE</string>
+    <string name="output_message">Output:</string>
 
 </resources>
