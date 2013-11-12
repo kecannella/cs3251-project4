@@ -51,6 +51,7 @@ typedef struct {
 void doList(ClientInfo *);
 void doDiff(ClientInfo *);
 void doPull(ClientInfo *);
+void doCap(ClientInfo *);
 void doLeave(ClientInfo *);
 
 void killSignalHandler(int signo) {
@@ -101,6 +102,9 @@ void *handleClient(void *arg) {
             case PULL:
                 doPull(client);
                 break;
+			case CAP:
+				doCap(client);
+				break;
             case LEAVE:
                 doLeave(client);
                 break;
@@ -120,7 +124,15 @@ void doList(ClientInfo *client) {
     char *key;
     forKeyInHashmap(client->serverFiles, i, key) {
         fwrite(key, 1, HASH_LENGTH, client->stream);
-        checkStream("sending list");
+        checkStream("sending hash during List");
+        char *filename = getFromHashmap(client->serverFiles, key);
+        if (filename != NULL) {        
+            uint32_t namelen = strlen(filename);
+            fwrite(&namelen, sizeof(namelen), 1, client->stream);
+            checkStream("sending filename length during List");
+            fwrite(filename, 1, namelen, client->stream);
+            checkStream("sending filename during List");
+		}
     }  
     fflush(client->stream);
     checkStream("flushing list");
@@ -190,6 +202,16 @@ void doPull(ClientInfo *client) {
     }
     fflush(client->stream);
     checkStream("flushing files during Pull");
+}
+
+void doCap(Client Info *client) {
+	// TODO choose list of files
+	// TODO send number of files
+	// TODO for each file send
+	//	- filename size
+	//	- filename
+	//	- file size
+	//	- file (4096 byte chunks)
 }
 
 void doLeave(ClientInfo *client) {

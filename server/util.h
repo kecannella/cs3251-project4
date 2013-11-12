@@ -7,7 +7,8 @@
 #define LIST    1
 #define DIFF    2
 #define PULL    3
-#define LEAVE   4
+#define CAP     4
+#define LEAVE   5
 typedef char MessageType;
 
 typedef struct {
