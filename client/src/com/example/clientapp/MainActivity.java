@@ -153,13 +153,13 @@ public class MainActivity extends Activity {
 				out.write(MessageType.CAP.getValue());
 				out.flush();
 				
-				int numFiles = readInt();
-				for (int i = 0; i < numFiles; ++i) {
-					int namesize = readInt();
+				int namesize = readInt();
+				while (namesize != 0) {
 					String filename = readString(namesize);
 					int filesize = readInt();
 					// TODO setup directory for filename?
 					readFile(filename, filesize);
+					namesize = readInt();
 				}
 				numDesiredFiles = 0;
 				

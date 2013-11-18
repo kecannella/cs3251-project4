@@ -159,6 +159,43 @@ void doDiff(ClientInfo *client) {
     }
 }
 
+uint32_t sendFile(ClientInfo *client, char *filename) {
+    if (filename == NULL) {
+        return;
+    }        
+    uint32_t bytesSent = 0;
+    uint32_t namelen = strlen(filename);
+    bytesSent += fwrite(&namelen, sizeof(namelen), 1, client->stream);
+    checkStream("sending filename length during Pull");
+    bytesSent += fwrite(filename, 1, namelen, client->stream);
+    checkStream("sending filename during Pull");
+    
+    FILE *file = fopen(filename, "r");
+    if (ferror(client->stream)) {
+        fprintf(logfile, forClient("Fatal error while opening file during Pull: %s\n"), strerror(errno));
+        doLeave(client);
+    }
+    struct stat st;
+    if (stat(filename, &st) == -1) {                    
+        fprintf(logfile, forClient("Fatal error while getting filesize during Pull: %s\n"), strerror(errno));
+        doLeave(client);
+    }
+    uint32_t filesize = st.st_size;
+    bytesSent += fwrite(&filesize, sizeof(filesize), 1, client->stream);
+    checkStream("sending filesize during Pull");
+    int bytes;
+    unsigned char data[4096];
+    while ((bytes = fread(data, 1, 4096, file)) != 0) {
+        bytesSent += fwrite(data, 1, bytes, client->stream);
+        checkStream("sending file during Pull");
+    }
+    if (fclose(file) == EOF) {
+        fprintf(logfile, forClient("Fatal error while closing file during Pull: %s\n"), strerror(errno));
+        doLeave(client);
+    }
+    return bytesSent;
+}
+
 void doPull(ClientInfo *client) {
     if (client->desiredFiles == NULL) {
         fprintf(logfile, forClient("Pulling files before sending a list of desired files! Forcing disconnect.\n"));
@@ -168,50 +205,35 @@ void doPull(ClientInfo *client) {
     int i;
     for (i = 0; i < client->numDesiredFiles; i++) {
         char *filename = getFromHashmap(client->serverFiles, client->desiredFiles + (i * HASH_LENGTH));
-        if (filename != NULL) {        
-            uint32_t namelen = strlen(filename);
-            fwrite(&namelen, sizeof(namelen), 1, client->stream);
-            checkStream("sending filename length during Pull");
-            fwrite(filename, 1, namelen, client->stream);
-            checkStream("sending filename during Pull");
-            
-            FILE *file = fopen(filename, "r");
-            if (ferror(client->stream)) {
-                fprintf(logfile, forClient("Fatal error while opening file during Pull: %s\n"), strerror(errno));
-                doLeave(client);
-            }
-            struct stat st;
-            if (stat(filename, &st) == -1) {                    
-                fprintf(logfile, forClient("Fatal error while getting filesize during Pull: %s\n"), strerror(errno));
-                doLeave(client);
-            }
-            uint32_t filesize = st.st_size;
-            fwrite(&filesize, sizeof(filesize), 1, client->stream);
-            checkStream("sending filesize during Pull");
-            int bytes;
-            unsigned char data[4096];
-            while ((bytes = fread(data, 1, 4096, file)) != 0) {
-                fwrite(data, 1, bytes, client->stream);
-                checkStream("sending file during Pull");
-            }
-            if (fclose(file) == EOF) {
-                fprintf(logfile, forClient("Fatal error while closing file during Pull: %s\n"), strerror(errno));
-                doLeave(client);
-            }
-        }           
+        sendFile(client, filename);   
     }
     fflush(client->stream);
     checkStream("flushing files during Pull");
 }
 
-void doCap(Client Info *client) {
-	// TODO choose list of files
-	// TODO send number of files
-	// TODO for each file send
-	//	- filename size
-	//	- filename
-	//	- file size
-	//	- file (4096 byte chunks)
+void doCap(ClientInfo *client) {
+    uint32_t cap;
+    fread(&cap, sizeof(cap), 1, client->stream);
+    uint32_t sent = 0;
+    //TODO open xml file - sort by play count??
+    while (sent < cap) {	    
+	    char *filename = NULL; // TODO read xml file, get next best song
+	    uint32_t bytesToSend = 0;
+	    bytesToSend = strlen(filename) + 3*sizeof(uint32_t); // need to send length of filename, filename, size of file, and (potentially) endOfList
+	    struct stat st;
+        if (stat(filename, &st) == -1) {                    
+            fprintf(logfile, forClient("Fatal error while getting filesize during Pull: %s\n"), strerror(errno));
+            doLeave(client);
+        }
+        bytesToSend += st.st_size; // need to send entire file
+        if (sent + bytesToSend > cap) {
+            break;
+        }
+	    sent += sendFile(client, filename);
+    }
+    //TODO close xml file
+    uint32_t endOfList = 0;
+    fwrite(&endOfList, sizeof(endOfList), 1, client->stream);
 }
 
 void doLeave(ClientInfo *client) {
