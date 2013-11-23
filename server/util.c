@@ -5,7 +5,7 @@
 
 #include "util.h"
 
-#define LOAD_FACTOR 0.5
+#define LOAD_FACTOR 0.5d
 
 char *hashFile(FILE *file) {
     unsigned char *md_value = malloc(HASH_LENGTH);
@@ -33,7 +33,7 @@ void createIndex(Hashmap *map, DIR *directory) {
         if (strcmp(ent->d_name, ".") == 0 || strcmp(ent->d_name, "..") == 0) {
             continue;
         }
-        FILE *file = fopen(ent->d_name, "r");
+        FILE *file = fopen(ent->d_name, "rb");
         exitIfError(ferror(file), "opening file during indexing");
         char *hash = hashFile(file);
         exitIfError(fclose(file) == EOF, "closing file during indexing");
@@ -132,4 +132,3 @@ void exitIfError(int failIfTrue, const char *action) {
         exit(EXIT_FAILURE);
     }
 }
-

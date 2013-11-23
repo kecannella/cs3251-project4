@@ -9,6 +9,7 @@
 #define PULL    3
 #define CAP     4
 #define LEAVE   5
+
 typedef char MessageType;
 
 typedef struct {
