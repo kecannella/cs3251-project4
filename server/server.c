@@ -102,7 +102,7 @@ void *handleClient(void *arg) {
                 doLeave(client);
                 break;
             default:
-                fprintf(logfile, forClient("Got unknown command. Forcing Disconnect.\n"), client->ip, client->port);
+                fprintf(logfile, forClient("Got unknown command. Forcing Disconnect.\n"));
                 doLeave(client);
         }
     }    
