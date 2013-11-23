@@ -2,7 +2,7 @@
 *
 * FILE:     server.c
 * AUTHOR:   W. Scott Johnson and Katherine Cannella
-* PROJECT:  CS 3251 Project 2 - Professor Traynor
+* PROJECT:  CS 3251 Project 4 - Professor Traynor
 * DESCRIPTION:  Network Server Code
 *
 *////////////////////////////////////////////////////////////
@@ -53,13 +53,6 @@ void doDiff(ClientInfo *);
 void doPull(ClientInfo *);
 void doCap(ClientInfo *);
 void doLeave(ClientInfo *);
-
-void killSignalHandler(int signo) {
-    if (logfile != stdout) {
-        fclose(logfile);
-    }
-    exit(EXIT_SUCCESS);
-}
 
 int setupServerSocket() {
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -124,7 +117,7 @@ void doList(ClientInfo *client) {
     char *key;
     forKeyInHashmap(client->serverFiles, i, key) {
         fwrite(key, 1, HASH_LENGTH, client->stream);
-        checkStream("sending hash during List");
+        checkStream("sending list");
         char *filename = getFromHashmap(client->serverFiles, key);
         if (filename != NULL) {        
             uint32_t namelen = strlen(filename);
@@ -245,28 +238,25 @@ void doLeave(ClientInfo *client) {
 }
 
 int main(int argc, char *argv[]) {
-    if (signal(SIGINT, killSignalHandler) == SIG_ERR) {
-        printf("Can't catch SIGINT, so logging to stdout instead.\n");
-        logfile = stdout;
-    } else {    
-        logfile = fopen(LOGFILE, "w");
-    }
-   
+    signal(SIGPIPE, SIG_IGN);
+    logfile = fopen(LOGFILE, "w");
+    setvbuf(logfile, NULL, _IONBF, 0);
+    
     OpenSSL_add_all_digests(); 
-    fprintf(logfile, "Creating Music Index...\n");
+    fprintf(stdout, "Creating Music Index...\n");
     Hashmap *filemap = newHashmap(INITIAL_HASHMAP_CAPACITY);
     chdir("./Music");
     DIR *directory = opendir(".");
     createIndex(filemap, directory);
     
-    fprintf(logfile, "Starting Server...\n");
+    fprintf(stdout, "Starting Server...\n");
     int serverSocket = setupServerSocket();
     pthread_t thread;
     pthread_attr_t threadAttributes;
     pthread_attr_init(&threadAttributes);
     pthread_attr_setdetachstate(&threadAttributes, PTHREAD_CREATE_DETACHED);
     
-    fprintf(logfile, "Server started. Listening for connections...\n");
+    fprintf(stdout, "Server started. Listening for connections...\n");
     while(1) {
         ClientInfo *client = malloc(sizeof(ClientInfo));
         exitIfError(client == NULL, "mallocing client");
@@ -286,4 +276,5 @@ int main(int argc, char *argv[]) {
     closedir(directory);
     fclose(logfile);
     EVP_cleanup();
+    return EXIT_SUCCESS;
 }
