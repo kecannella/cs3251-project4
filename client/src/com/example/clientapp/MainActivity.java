@@ -23,10 +23,10 @@ public class MainActivity extends Activity {
 	private Socket s;
 	private OutputStream out;
 	private InputStream in;
-	private static final String SERVERNAME = "shuttle1.cc.gatech.edu";
+	private static final String SERVERNAME = "10.0.2.2";
 	private static final int SERVERPORT = 2048;
 	private static final int HASHLENGTH = 32;
-	private Map<String, String> serverFiles;
+	private Map<byte[], String> serverFiles;
 	private int numServerFiles;
 	private int numDesiredFiles;
 
@@ -41,7 +41,7 @@ public class MainActivity extends Activity {
 		StrictMode.setThreadPolicy(policy); 
 		
 		try {
-			serverFiles = new HashMap<String, String>();
+			serverFiles = new HashMap<byte[], String>();
 			s = new Socket(SERVERNAME, SERVERPORT);
 			out = s.getOutputStream();
 			in = s.getInputStream();
@@ -72,7 +72,8 @@ public class MainActivity extends Activity {
 			
 			serverFiles.clear();
 			for (int i = 0; i < numServerFiles; ++i) {
-				String hash = readString(HASHLENGTH);
+				byte[] hash = new byte[HASHLENGTH];
+				in.read(hash);
 				int nameLength = readInt();
 				String filename = readString(nameLength);
 				serverFiles.put(hash, filename);
@@ -92,8 +93,8 @@ public class MainActivity extends Activity {
 			setOutput("Needed Files:");
 			String directory = ""; // TODO
 			Map<String, String> clientFiles = getFileList(directory);
-			ArrayList<String> neededFiles = new ArrayList<String>();
-			for (Map.Entry<String, String> pair : serverFiles.entrySet()) {
+			ArrayList<byte[]> neededFiles = new ArrayList<byte[]>();
+			for (Map.Entry<byte[], String> pair : serverFiles.entrySet()) {
 				if (!clientFiles.containsKey(pair.getKey())) {
 					neededFiles.add(pair.getKey());
 					addOutput(pair.getValue());
@@ -106,8 +107,10 @@ public class MainActivity extends Activity {
 			else {
 				out.write(MessageType.DIFF.getValue());
 				out.flush();
-				for (String hash : neededFiles) {
-					sendString(hash);
+				sendInt(numDesiredFiles);
+				for (byte[] hash : neededFiles) {
+					Log.wtf("HASH LENGTH", "" + hash.length);
+					out.write(hash);
 				}
 			}
 		} catch (IOException e) {

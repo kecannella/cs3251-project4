@@ -239,8 +239,8 @@ void doLeave(ClientInfo *client) {
 
 int main(int argc, char *argv[]) {
     signal(SIGPIPE, SIG_IGN);
-    logfile = fopen(LOGFILE, "w");
-    setvbuf(logfile, NULL, _IONBF, 0);
+    logfile = stdout; //fopen(LOGFILE, "w");
+    //setvbuf(logfile, NULL, _IONBF, 0);
     
     OpenSSL_add_all_digests(); 
     fprintf(stdout, "Creating Music Index...\n");
