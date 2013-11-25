@@ -1,0 +1,6 @@
+client/.classpath
+client/.settings/
+client/bin/
+client/gen/
+server/server
+server/Music/

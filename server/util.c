@@ -15,13 +15,18 @@ char *hashFile(FILE *file) {
     const EVP_MD *md = EVP_sha256();
     EVP_DigestInit_ex(&mdctx, md, NULL);
     int bytes;
-    unsigned char data[4096];
-    while ((bytes = fread(data, 1, 4096, file)) != 0) {
+    unsigned char data[8192];
+    while ((bytes = fread(data, 1, 8192, file)) != 0) {
         exitIfError(ferror(file), "reading data from file during hashing");
         EVP_DigestUpdate(&mdctx, data, bytes);
     }
     EVP_DigestFinal_ex(&mdctx, md_value, NULL);
     EVP_MD_CTX_cleanup(&mdctx);
+    int i;
+    for (i = 0; i < HASH_LENGTH; i++) {
+        printf("%02x", md_value[i]);
+    }
+    printf("\n");
     return md_value;
 }
 void createIndex(Hashmap *map, DIR *directory) {

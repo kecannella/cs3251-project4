@@ -54,6 +54,32 @@ void doPull(ClientInfo *);
 void doCap(ClientInfo *);
 void doLeave(ClientInfo *);
 
+
+char getByte(FILE *stream) {
+    char byte;
+    fread(&byte, sizeof(char), 1, stream);
+    return byte;
+}
+
+size_t sendInt(FILE *stream, int val) {
+    uint32_t converted = htonl(val);
+    return sizeof(converted) * fwrite(&converted, sizeof(converted), 1, stream);
+}
+
+int getInt(FILE *stream) {
+    uint32_t val;
+    fread(&val, sizeof(uint32_t), 1, stream);
+    return ntohl(val);
+}
+
+size_t sendString(FILE *stream, char *str, size_t size) {
+    return fwrite(str, 1, size, stream);
+}
+
+size_t getString(FILE *stream, char *str, size_t size) {
+    return fread(str, 1, size, stream);
+}
+
 int setupServerSocket() {
     int serverSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     exitIfError(serverSocket < 0, "creating socket");
@@ -82,8 +108,7 @@ void *handleClient(void *arg) {
     checkStream("opening socket stream");
     client->desiredFiles = NULL;
     while (1) {
-        MessageType type;
-        fread(&type, sizeof(MessageType), 1, client->stream);
+        MessageType type = getByte(client->stream);
         checkStream("getting command from client");
         switch (type) {
             case LIST:                
@@ -110,8 +135,7 @@ void *handleClient(void *arg) {
 
 void doList(ClientInfo *client) {
     fprintf(logfile, forClient("Getting list of files.\n"));
-    uint32_t numFiles = client->serverFiles->load;
-    fwrite(&numFiles, sizeof(numFiles), 1, client->stream);
+    sendInt(client->stream, client->serverFiles->load);
     checkStream("sending list length");
     size_t i;
     char *key;
@@ -121,9 +145,9 @@ void doList(ClientInfo *client) {
         char *filename = getFromHashmap(client->serverFiles, key);
         if (filename != NULL) {        
             uint32_t namelen = strlen(filename);
-            fwrite(&namelen, sizeof(namelen), 1, client->stream);
+            sendInt(client->stream, namelen);
             checkStream("sending filename length during List");
-            fwrite(filename, 1, namelen, client->stream);
+            sendString(client->stream, filename, namelen);
             checkStream("sending filename during List");
 		}
     }  
@@ -133,8 +157,7 @@ void doList(ClientInfo *client) {
 
 void doDiff(ClientInfo *client) {
     fprintf(logfile, forClient("Sending list of desired files.\n"));
-    uint32_t entries;
-    fread(&entries, sizeof(entries), 1, client->stream);
+    uint32_t entries = getInt(client->stream);
     checkStream("getting number of desired files");
     if (entries > client->serverFiles->load) {
         fprintf(logfile, forClient("Asking for too many files! Forcing disconnect.\n"));
@@ -146,7 +169,7 @@ void doDiff(ClientInfo *client) {
             fprintf(logfile, forClient("Fatal error while realloc'ing desiredFiles: %s\n"), strerror(errno));
             doLeave(client);
         }
-        fread(client->desiredFiles, HASH_LENGTH, entries, client->stream);
+        getString(client->stream, client->desiredFiles, HASH_LENGTH * entries);
         checkStream("getting diff file hash");
         client->numDesiredFiles = entries;
     }
@@ -158,9 +181,9 @@ uint32_t sendFile(ClientInfo *client, char *filename) {
     }        
     uint32_t bytesSent = 0;
     uint32_t namelen = strlen(filename);
-    bytesSent += fwrite(&namelen, sizeof(namelen), 1, client->stream);
+    bytesSent += sendInt(client->stream, namelen);
     checkStream("sending filename length during Pull");
-    bytesSent += fwrite(filename, 1, namelen, client->stream);
+    bytesSent += sendString(client->stream, filename, namelen);
     checkStream("sending filename during Pull");
     
     FILE *file = fopen(filename, "r");
@@ -173,13 +196,15 @@ uint32_t sendFile(ClientInfo *client, char *filename) {
         fprintf(logfile, forClient("Fatal error while getting filesize during Pull: %s\n"), strerror(errno));
         doLeave(client);
     }
-    uint32_t filesize = st.st_size;
-    bytesSent += fwrite(&filesize, sizeof(filesize), 1, client->stream);
+    uint32_t filesize = st.st_size;    
+    bytesSent += sendInt(client->stream, filesize);
     checkStream("sending filesize during Pull");
+
     int bytes;
-    unsigned char data[4096];
-    while ((bytes = fread(data, 1, 4096, file)) != 0) {
-        bytesSent += fwrite(data, 1, bytes, client->stream);
+    bytesSent = 0;
+    unsigned char data[8192];
+    while ((bytes = getString(file, data, 8192)) != 0) {
+        bytesSent += sendString(client->stream, data, bytes);
         checkStream("sending file during Pull");
     }
     if (fclose(file) == EOF) {
