@@ -37,7 +37,7 @@ public class MainActivity extends Activity {
 	private Socket s;
 	private OutputStream out;
 	private InputStream in;
-	private static final String SERVERNAME = "192.168.245.2";
+	private static final String SERVERNAME = "shuttle1.cc.gatech.edu";
 	private static final int SERVERPORT = 2048;
 	private static final int HASHLENGTH = 32;
 	private Map<ByteBuffer, String> serverFiles;
@@ -225,15 +225,21 @@ public class MainActivity extends Activity {
 				SeekBar seekBar = (SeekBar)findViewById(R.id.cap_slider); 
 				int cap = seekBar.getProgress();
 				sendInt(cap);
+				Log.d("info", "cap size: " + cap);
 				
+				int filesRead = 0;
 				int namesize = readInt();
 				while (namesize != 0) {
 					String filename = readString(namesize);
 					int filesize = readInt();
+					Log.d("info", "filename: " + filename + " size: " + filesize);
 					readFile(filename, filesize);
 					namesize = readInt();
+					addOutput("Downloaded " + filename);
+					filesRead ++;
 				}
-				numDesiredFiles = 0;
+				numDesiredFiles -= filesRead;
+				addOutput("Finished");
 				
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -317,6 +323,7 @@ public class MainActivity extends Activity {
 				file.write(buffer, 0, bytesRead);
 				totalbytes += bytesRead;
 			}
+			Log.d("info", "Finished reading file " + filename);
 			file.close();
 		} catch (FileNotFoundException e) {
 			e.printStackTrace();
