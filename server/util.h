@@ -23,13 +23,35 @@ typedef struct {
     size_t load;
 } Hashmap;
 
+typedef struct node{
+	int weight;
+	void *data;
+	struct node *next;
+} priority_node;
+
+typedef struct {
+	priority_node *head;
+} priority_list;
+
 Hashmap *newHashmap(size_t);
 void freeHashmap(Hashmap *map, void (*)(void *), void (*)(void *));
 char *getFromHashmap(Hashmap *, char *);
 void putInHashmap(Hashmap *, char *, char *);
 void growHashmap(Hashmap *, size_t);
 
+priority_list *newPriorityList();
+void freePriorityList(priority_list *, void (*)(void *));
+void *getFromPriorityList(priority_list *);
+void putInPriorityList(priority_list *, void *, int);
+void *printPriorityList(priority_list *, void(*)(void *));
+
 char *hashFile(FILE *);
 void createIndex(Hashmap *, DIR *);
+void createPriorityIndex(priority_list *, DIR *, char *);
 void exitIfError(int, const char *);
 void exitThreadIfError(int, const char *);
+
+
+
+
+

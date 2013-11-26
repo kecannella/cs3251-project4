@@ -19,7 +19,7 @@ all: server
 
 server: server.c util.c util.h
 	$(CC) server.c util.c -o server -lcrypto -pthread
-
+	
 clean:
-	    rm -f client server *.o
+	    rm -f server *.o
 

@@ -2,6 +2,7 @@
 #include <openssl/evp.h>
 #include <pthread.h>
 #include <string.h>
+#include <sys/stat.h>
 
 #include "util.h"
 
@@ -22,11 +23,11 @@ char *hashFile(FILE *file) {
     }
     EVP_DigestFinal_ex(&mdctx, md_value, NULL);
     EVP_MD_CTX_cleanup(&mdctx);
-    int i;
+    /*int i;
     for (i = 0; i < HASH_LENGTH; i++) {
         printf("%02x", md_value[i]);
     }
-    printf("\n");
+    printf("\n");*/
     return md_value;
 }
 void createIndex(Hashmap *map, DIR *directory) {
@@ -129,6 +130,188 @@ void growHashmap(Hashmap *map, size_t newCapacity) {
     }
     map->capacity = newCapacity;
 }
+
+char *getNextName(char *pos) {
+	char *temp = strstr(pos,"<key>Location</key>");
+    if (temp == NULL) return NULL; //reached end of tracks list
+    char *name_start = strstr(temp, "<string>");
+    if (name_start == NULL) return NULL;
+    else name_start = name_start + 8;
+    char *name_end = strstr(temp, "</string>");
+    if (name_end == NULL) return NULL;
+    char *name = calloc(name_end - name_start + 1, 1);
+    exitIfError(name == NULL, "mallocing during itunes xml parsing");
+    strncpy(name, name_start, name_end - name_start);
+    
+    char *token, *oldtoken;
+    token = strstr(name,"/");
+    while (token != NULL) {
+    	oldtoken = token;
+    	token = strstr(token + 1,"/");
+    }
+    char *file = calloc(name + strlen(name) - oldtoken, 1);
+    exitIfError(file == NULL, "mallocing during itunes xml parsing");
+    strncpy(file, oldtoken + 1, name + strlen(name) - oldtoken - 1);
+    free(name);
+    
+    int length = strlen(file);
+    char *space = strstr(file,"%20");
+    while (space != NULL) {
+    	*space = ' ';
+    	while(space < file + length - 3) {
+    		*(space + 1) = *(space + 3);
+    		++space;
+    	}
+	   	*(file + length - 2) = '\0';
+	   	*(file + length - 1) = '\0';
+    	space = strstr(file,"%20");
+    }
+    
+    return file;
+}
+
+char *getHashInDir (char *name, DIR *directory) {
+	char *hash = NULL;
+	struct dirent *ent;
+	while ((ent = readdir(directory)) != NULL) {
+		if (strcmp(ent->d_name, name) == 0) {
+			FILE *file = fopen(ent->d_name, "rb");
+			exitIfError(ferror(file), "opening file during indexing");
+			hash = hashFile(file);
+		}
+	}
+	rewinddir(directory);
+	return hash;
+}
+
+int getNextPlayCount(char **pos) {
+	char *end = strstr(*pos,"<key>Location</key>"); 
+	char *temp = strstr(*pos,"<key>Play Count</key>"); 
+	*pos = end;
+    if (*pos != NULL) *pos += 19;	
+    if (temp == NULL || (end != NULL && temp > end)) return 0; 
+    char *count_start = strstr(temp, "<integer>"); 
+    if (count_start == NULL || (end != NULL && count_start > end)) return 0;
+    else count_start = count_start + 9;
+    char *count_end = strstr(temp, "</integer>"); 
+    if (count_end == NULL || (end != NULL && count_end > end)) return 0;
+    char *count = calloc(count_end - count_start + 1, 1);
+    strncpy(count, count_start, count_end - count_start);
+    int num = atoi(count); 
+    free(count);
+    return num;
+}
+
+void createPriorityIndex(priority_list *list, DIR *directory, char *clientlist) {
+    if (directory == NULL) {
+        printf("ERROR");
+    }
+    
+	FILE *file = fopen("iTunes Music Library.xml", "r");
+	struct stat st;
+	stat("iTunes Music Library.xml", &st);
+	int size = st.st_size;
+	
+	char *itunes = calloc(size * sizeof(char) + 1, sizeof(char));
+    exitIfError(itunes == NULL, "mallocing during PriorityList creation");
+	
+    int bytes = fread(itunes, 1, size, file);
+    exitIfError(bytes != size, "reading data from itunes xml file");
+    exitIfError(ferror(file), "reading data from itunes xml file");
+    
+    fclose(file);
+    
+    char *pos = itunes;
+    int i;
+    while (pos != NULL) {
+		char *name = getNextName(pos);
+		if (name == NULL) break;
+		int count = getNextPlayCount(&pos);
+		char *hash = getHashInDir(name, directory);
+		
+		if (hash != NULL) {
+			char *clienthash = strstr(clientlist,hash);
+			if (clienthash != NULL && (clienthash - clientlist) % HASH_LENGTH == 0)
+				putInPriorityList(list, hash, count);
+			//free(hash);
+		}
+		free(name);
+    }
+    
+    free(itunes);
+
+}
+
+priority_list *newPriorityList() {
+    priority_list *list = malloc(sizeof(priority_list));
+    exitIfError(list == NULL, "mallocing during PriorityList creation");
+    list->head = NULL;
+    return list;
+}
+
+void freePriorityList(priority_list *list, void (*freeDataFunc)(void *)) {
+    if (list != NULL) {
+		while (list->head != NULL) {
+			void *data = getFromPriorityList(list);
+		    if (freeDataFunc != NULL) {
+		        freeDataFunc(data);
+		    }
+		}
+		free(list);
+	}
+}
+
+void *getFromPriorityList(priority_list *list) {
+	if (list->head == NULL) {
+		return NULL;
+	}
+	else {
+		priority_node *node = list->head;
+		list->head = list->head->next;
+		void *data = node->data;
+		free(node);
+		return data;
+	}
+}
+
+void putInPriorityList(priority_list *list, void *data, int weight) {
+    if (list != NULL) {
+		priority_node *node = malloc(sizeof(priority_node));
+		exitIfError(node == NULL, "mallocing during priority node creation");
+		node->data = data;
+		node->weight = weight;
+		node->next = NULL;
+		if (list->head == NULL || list->head->weight < weight) {
+			node->next = list->head;
+			list->head = node;
+		}
+		else {
+			priority_node *current = list->head;
+			while (current->next != NULL && current->next->weight > weight) {
+				current = current->next;
+			}
+			priority_node *next = current->next;
+			current->next = node;
+			node->next = next;
+		}
+	}
+}
+
+void *printPriorityList(priority_list *list, void(*printDataFunc)(void *)) {
+	if (list != NULL) {
+		priority_node *current = list->head;
+		while(current != NULL) {
+			printf("%d\t", current->weight);
+			if (printDataFunc != NULL) {
+				printDataFunc(current->data);
+			}
+			printf("\n");
+			current = current->next;
+		}
+		printf("\n");
+	}
+}
+
 
 void exitIfError(int failIfTrue, const char *action) {
     if (failIfTrue) {

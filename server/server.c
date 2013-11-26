@@ -233,9 +233,13 @@ void doCap(ClientInfo *client) {
     uint32_t cap;
     fread(&cap, sizeof(cap), 1, client->stream);
     uint32_t sent = 0;
-    //TODO open xml file - sort by play count??
-    while (sent < cap) {	    
-	    char *filename = NULL; // TODO read xml file, get next best song
+    
+	//TODO open xml file - sort by play count??
+	priority_list *list = newPriorityList();
+    DIR *directory = opendir(".");
+	createPriorityIndex(list,directory,client->desiredFiles);
+    while (sent < cap) {	
+	    char *filename = getFromHashmap(client->serverFiles, (char *)getFromPriorityList(list)); // TODO read xml file, get next best song
 	    uint32_t bytesToSend = 0;
 	    bytesToSend = strlen(filename) + 3*sizeof(uint32_t); // need to send length of filename, filename, size of file, and (potentially) endOfList
 	    struct stat st;
@@ -249,7 +253,7 @@ void doCap(ClientInfo *client) {
         }
 	    sent += sendFile(client, filename);
     }
-    //TODO close xml file
+    freePriorityList(list, NULL);
     uint32_t endOfList = 0;
     fwrite(&endOfList, sizeof(endOfList), 1, client->stream);
 }
