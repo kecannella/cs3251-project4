@@ -30,13 +30,14 @@ import android.content.DialogInterface;
 import android.util.Log;
 import android.view.Menu;
 import android.view.View;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 public class MainActivity extends Activity {
 	private Socket s;
 	private OutputStream out;
 	private InputStream in;
-	private static final String SERVERNAME = "10.0.2.2";
+	private static final String SERVERNAME = "192.168.245.2";
 	private static final int SERVERPORT = 2048;
 	private static final int HASHLENGTH = 32;
 	private Map<ByteBuffer, String> serverFiles;
@@ -97,6 +98,27 @@ public class MainActivity extends Activity {
 			errorAlert.show();
 			e.printStackTrace();
 		}
+		
+		SeekBar seekBar = (SeekBar)findViewById(R.id.cap_slider); 
+		final TextView seekBarValue = (TextView)findViewById(R.id.cap_value); 
+
+	    seekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){ 
+			@Override 
+			public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { 
+				if (progress >= 1000000)
+					seekBarValue.setText("Cap amount: " + String.valueOf(progress/1000000) + "MB");
+				else
+					seekBarValue.setText("Cap amount: " + String.valueOf(progress/1000) + "KB");
+			} 
+			
+			@Override 
+			public void onStartTrackingTouch(SeekBar seekBar) { 
+			} 
+			
+			@Override 
+			public void onStopTrackingTouch(SeekBar seekBar) { 
+			} 
+		}); 
 	}
 
 	@Override
@@ -199,6 +221,10 @@ public class MainActivity extends Activity {
 				setOutput("Pulling Files with cap:");
 				out.write(MessageType.CAP.getValue());
 				out.flush();
+				
+				SeekBar seekBar = (SeekBar)findViewById(R.id.cap_slider); 
+				int cap = seekBar.getProgress();
+				sendInt(cap);
 				
 				int namesize = readInt();
 				while (namesize != 0) {

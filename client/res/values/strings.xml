@@ -10,5 +10,6 @@
     <string name="cap_command">CAP</string>
     <string name="leave_command">LEAVE</string>
     <string name="output_message">Output:</string>
+    <string name="cap_value">Cap Amount:</string>
 
 </resources>

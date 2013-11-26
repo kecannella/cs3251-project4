@@ -6,7 +6,7 @@
 
 #include "util.h"
 
-#define LOAD_FACTOR 0.5d
+#define LOAD_FACTOR 0.5
 
 char *hashFile(FILE *file) {
     unsigned char *md_value = malloc(HASH_LENGTH);
