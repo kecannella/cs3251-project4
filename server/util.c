@@ -231,8 +231,10 @@ void createPriorityIndex(priority_list *list, DIR *directory, char *clientlist) 
 		
 		if (hash != NULL) {
 			char *clienthash = strstr(clientlist,hash);
-			if (clienthash != NULL && (clienthash - clientlist) % HASH_LENGTH == 0)
+			//if (clienthash != NULL) {
+				printf("Putting (%d,%s) in the list\n",count,name);
 				putInPriorityList(list, hash, count);
+			//}
 			//free(hash);
 		}
 		free(name);
