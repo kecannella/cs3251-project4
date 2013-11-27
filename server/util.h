@@ -47,7 +47,7 @@ void *printPriorityList(priority_list *, void(*)(void *));
 
 char *hashFile(FILE *);
 void createIndex(Hashmap *, DIR *);
-void createPriorityIndex(priority_list *, DIR *, char *);
+void createPriorityIndex(priority_list *, DIR *);
 void exitIfError(int, const char *);
 void exitThreadIfError(int, const char *);
 

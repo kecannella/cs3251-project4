@@ -227,7 +227,6 @@ public class MainActivity extends Activity {
 				sendInt(cap);
 				Log.d("info", "cap size: " + cap);
 				
-				int filesRead = 0;
 				int namesize = readInt();
 				while (namesize != 0) {
 					String filename = readString(namesize);
@@ -236,9 +235,8 @@ public class MainActivity extends Activity {
 					readFile(filename, filesize);
 					namesize = readInt();
 					addOutput("Downloaded " + filename);
-					filesRead ++;
 				}
-				numDesiredFiles -= filesRead;
+				numDesiredFiles = 0;
 				addOutput("Finished");
 				
 			} catch (IOException e) {

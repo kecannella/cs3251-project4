@@ -179,7 +179,6 @@ uint32_t sendFile(ClientInfo *client, char *filename) {
     if (filename == NULL) {
         return;
     }  
-    printf("sending file %s...", filename);      
     uint32_t bytesSent = 0;
     uint32_t namelen = strlen(filename);
     bytesSent += sendInt(client->stream, namelen);
@@ -213,7 +212,6 @@ uint32_t sendFile(ClientInfo *client, char *filename) {
         fprintf(logfile, forClient("Fatal error while closing file during Pull: %s\n"), strerror(errno));
         doLeave(client);
     }
-    printf("done\n");
     return bytesSent;
 }
 
@@ -236,36 +234,44 @@ void freeHash(void *hash) {
 	free((char *)hash);
 }
 
-void printHash(void *hash) {
-	printf("%s",(char *)hash);
-}
-
 void doCap(ClientInfo *client) {
     uint32_t cap = getInt(client->stream);
     checkStream("getting cap");
     uint32_t sent = 0;
     
+    char hash_buf[HASH_LENGTH + 1];
+    memset(hash_buf, 0, HASH_LENGTH + 1);
 	priority_list *list = newPriorityList();
     DIR *directory = opendir(".");
-	createPriorityIndex(list,directory,client->desiredFiles);
+	createPriorityIndex(list,directory);
     while (sent < cap) {	
     	char *hash = (char *)getFromPriorityList(list);
     	if (hash == NULL) break;
-    	char *filename = getFromHashmap(client->serverFiles, hash);
+    	
+    	char *filename = NULL; int i;
+    	for (i = 0; i < client->numDesiredFiles; i++) {
+		    char *clienthash = client->desiredFiles + (i * HASH_LENGTH);
+		    strncpy(hash_buf, clienthash, HASH_LENGTH);
+		    if (strcmp(hash_buf,hash) == 0) {
+		    	filename = getFromHashmap(client->serverFiles, hash);
+		    }
+		}
+		
     	free(hash); 
-	    uint32_t bytesToSend = 0;
-	    bytesToSend = strlen(filename) + 3*sizeof(uint32_t); // need to send length of filename, filename, size of file, and (potentially) endOfList
-	    struct stat st;
-        if (stat(filename, &st) == -1) {                    
-            fprintf(logfile, forClient("Fatal error while getting filesize during Cap: %s\n"), strerror(errno));
-            doLeave(client);
+    	if (filename != NULL) {
+			uint32_t bytesToSend = 0;
+			bytesToSend = strlen(filename) + 3*sizeof(uint32_t); // need to send length of filename, filename, size of file, and (potentially) endOfList
+			struct stat st;
+		    if (stat(filename, &st) == -1) {                    
+		        fprintf(logfile, forClient("Fatal error while getting filesize during Cap: %s\n"), strerror(errno));
+		        doLeave(client);
+		    }
+		    bytesToSend += st.st_size; // need to send entire file
+		    if (sent + bytesToSend <= cap) {
+		    	sent += sendFile(client, filename);
+		    }
         }
-        bytesToSend += st.st_size; // need to send entire file
-        printf("Cap: %u, sent so far: %u, to send: %u\n", cap, sent, bytesToSend);
-        if (sent + bytesToSend > cap) {
-            break;
-        }
-	    sent += sendFile(client, filename);
+	    
     }
     //freePriorityList(list, freeHash);
     uint32_t endOfList = 0;

@@ -202,7 +202,7 @@ int getNextPlayCount(char **pos) {
     return num;
 }
 
-void createPriorityIndex(priority_list *list, DIR *directory, char *clientlist) {
+void createPriorityIndex(priority_list *list, DIR *directory) {
     if (directory == NULL) {
         printf("ERROR");
     }
@@ -228,14 +228,12 @@ void createPriorityIndex(priority_list *list, DIR *directory, char *clientlist) 
 		if (name == NULL) break;
 		int count = getNextPlayCount(&pos);
 		char *hash = getHashInDir(name, directory);
-		
 		if (hash != NULL) {
-			char *clienthash = strstr(clientlist,hash);
-			//if (clienthash != NULL) {
-				printf("Putting (%d,%s) in the list\n",count,name);
-				putInPriorityList(list, hash, count);
-			//}
-			//free(hash);
+			char *hashstr = calloc(HASH_LENGTH + 1, 1);
+			exitIfError(hashstr == NULL, "mallocing during hash");
+			strncpy(hashstr,hash,HASH_LENGTH);
+			free(hash);
+			putInPriorityList(list, hashstr, count);
 		}
 		free(name);
     }
