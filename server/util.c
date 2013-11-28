@@ -207,9 +207,9 @@ void createPriorityIndex(priority_list *list, DIR *directory) {
         printf("ERROR");
     }
     
-	FILE *file = fopen("iTunes Music Library.xml", "r");
+	FILE *file = fopen("../iTunes Music Library.xml", "r");
 	struct stat st;
-	stat("iTunes Music Library.xml", &st);
+	stat("../iTunes Music Library.xml", &st);
 	int size = st.st_size;
 	
 	char *itunes = calloc(size * sizeof(char) + 1, sizeof(char));

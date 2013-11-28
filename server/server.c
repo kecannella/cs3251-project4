@@ -254,13 +254,13 @@ void doCap(ClientInfo *client) {
 		    strncpy(hash_buf, clienthash, HASH_LENGTH);
 		    if (strcmp(hash_buf,hash) == 0) {
 		    	filename = getFromHashmap(client->serverFiles, hash);
+		    	break;
 		    }
 		}
 		
     	free(hash); 
     	if (filename != NULL) {
-			uint32_t bytesToSend = 0;
-			bytesToSend = strlen(filename) + 3*sizeof(uint32_t); // need to send length of filename, filename, size of file, and (potentially) endOfList
+			uint32_t bytesToSend = strlen(filename) + 3*sizeof(uint32_t); // need to send length of filename, filename, size of file, and (potentially) endOfList
 			struct stat st;
 		    if (stat(filename, &st) == -1) {                    
 		        fprintf(logfile, forClient("Fatal error while getting filesize during Cap: %s\n"), strerror(errno));
@@ -273,9 +273,9 @@ void doCap(ClientInfo *client) {
         }
 	    
     }
-    //freePriorityList(list, freeHash);
+    free(list);
     uint32_t endOfList = 0;
-    fwrite(&endOfList, sizeof(endOfList), 1, client->stream);
+    sendInt(client->stream, endOfList);
 }
 
 void doLeave(ClientInfo *client) {

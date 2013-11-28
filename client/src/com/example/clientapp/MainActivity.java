@@ -20,7 +20,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
+import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.StrictMode;
@@ -37,13 +39,13 @@ public class MainActivity extends Activity {
 	private Socket s;
 	private OutputStream out;
 	private InputStream in;
-	private static final String SERVERNAME = "shuttle1.cc.gatech.edu";
+	private static final String SERVERNAME = "10.0.2.2";
 	private static final int SERVERPORT = 2048;
 	private static final int HASHLENGTH = 32;
 	private Map<ByteBuffer, String> serverFiles;
 	private int numServerFiles;
 	private int numDesiredFiles;
-
+	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		
@@ -128,134 +130,24 @@ public class MainActivity extends Activity {
 		return true;
 	}
 	
-	
 	public void doList(View view) {
-		try {
-			setOutput("Server Files:");
-			
-			out.write(MessageType.LIST.getValue());
-			out.flush();
-			
-			numServerFiles = readInt();
-			addOutput(numServerFiles + " files");
-			
-			serverFiles.clear();
-			for (int i = 0; i < numServerFiles; ++i) {
-				byte[] hash = new byte[HASHLENGTH];
-				in.read(hash);
-				int nameLength = readInt();
-				String filename = readString(nameLength);
-				serverFiles.put(ByteBuffer.wrap(hash), filename);
-				addOutput(filename);
-			}				
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
+		new ListTask().execute((Void) null);
 	}
 	
-	public void doDiff(View view) {
-		if (numServerFiles == 0) {
-			setOutput("Need to perform list");
-			doList(view);
-		}
-		try {
-			setOutput("Needed Files:");
-			Set<ByteBuffer> clientFiles = getFileList();
-			ArrayList<ByteBuffer> neededFiles = new ArrayList<ByteBuffer>();
-			for (Map.Entry<ByteBuffer, String> pair : serverFiles.entrySet()) {
-				if (!clientFiles.contains(pair.getKey())) {
-					neededFiles.add(pair.getKey());
-					addOutput(pair.getValue());
-				}
-			}
-			numDesiredFiles = neededFiles.size();
-			if (numDesiredFiles == 0) {
-				addOutput("All files up to date");
-			}
-			else {
-				out.write(MessageType.DIFF.getValue());
-				out.flush();
-				sendInt(numDesiredFiles);
-				for (ByteBuffer hash : neededFiles) {
-					out.write(hash.array());
-				}
-			}
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		
+	public void doDiff(View view) {		
+		new DiffTask().execute((Void) null);
 	}
 	
 	public void doPull(View view) {
-		if (numDesiredFiles == 0) {
-			setOutput("Need to perform diff");
-			doDiff(view);
-		}
-		if (numDesiredFiles != 0) {
-			try {
-				setOutput("Pulling Files:");
-				out.write(MessageType.PULL.getValue());
-				out.flush();				
-				for (int i = 0; i < numDesiredFiles; ++i) {
-					int namesize = readInt();
-					String filename = readString(namesize);
-					int filesize = readInt();
-					readFile(filename, filesize);
-					addOutput("Downloaded " + filename);
-				}
-				addOutput("Finished!");
-				numDesiredFiles = 0;
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+		new PullTask().execute((Void) null);
 	}
 	
 	public void doCap(View view) {
-		if (numDesiredFiles == 0) {
-			setOutput("Need to perform diff");
-			doDiff(view);
-		}
-		if (numDesiredFiles != 0) {
-			try {
-				setOutput("Pulling Files with cap:");
-				out.write(MessageType.CAP.getValue());
-				out.flush();
-				
-				SeekBar seekBar = (SeekBar)findViewById(R.id.cap_slider); 
-				int cap = seekBar.getProgress();
-				sendInt(cap);
-				Log.d("info", "cap size: " + cap);
-				
-				int namesize = readInt();
-				while (namesize != 0) {
-					String filename = readString(namesize);
-					int filesize = readInt();
-					Log.d("info", "filename: " + filename + " size: " + filesize);
-					readFile(filename, filesize);
-					namesize = readInt();
-					addOutput("Downloaded " + filename);
-				}
-				numDesiredFiles = 0;
-				addOutput("Finished");
-				
-			} catch (IOException e) {
-				e.printStackTrace();
-			}
-		}
+		new CapTask().execute((Void) null);
 	}
 	
 	public void doLeave(View view) {
-		setOutput("Leaving");
-    	try {
-    		out.write(MessageType.LEAVE.getValue());
-			out.flush();
-   		
-			s.close();
-		} catch (IOException e) {
-			e.printStackTrace();
-		}
-		this.finish();
+		new LeaveTask().execute((Void) null);
 	}
 	
 	public String readString(int length) {
@@ -383,5 +275,258 @@ public class MainActivity extends Activity {
 		  public byte getValue() {
 		    return value;
 		  }
+	}
+	
+	private class ListTask extends AsyncTask<Void, String, Void> {
+
+		@Override
+		protected void onPreExecute() {
+			setOutput("Server Files:");
+		}
+		
+		@Override
+		protected Void doInBackground(Void... params) {
+			try {
+				synchronized(s) {
+					out.write(MessageType.LIST.getValue());
+					out.flush();				
+					numServerFiles = readInt();
+					publishProgress(numServerFiles + " files");
+					
+					serverFiles.clear();
+					for (int i = 0; i < numServerFiles; ++i) {
+						byte[] hash = new byte[HASHLENGTH];
+						in.read(hash);
+						int nameLength = readInt();
+						String filename = readString(nameLength);
+						serverFiles.put(ByteBuffer.wrap(hash), filename);
+						publishProgress(filename);
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+		
+		@Override
+		protected void onProgressUpdate(String... progress) {
+			addOutput(progress[0]);
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			addOutput("Done!");
+		}
+	}
+	
+	private class DiffTask extends AsyncTask<Void, String, Void> {
+		AsyncTask<Void, String, Void> prevTask = null;
+
+		@Override
+		protected void onPreExecute() {		
+			if (numServerFiles == 0) {
+				prevTask = new ListTask().execute((Void) null);
+			} else {
+				setOutput("Needed Files:");
+			}
+		}
+		
+		@Override
+		protected Void doInBackground(Void... params) {			
+			try {
+				if (prevTask != null) {
+					prevTask.get();
+					publishProgress("Needed Files: ");
+				}
+				synchronized(s) {
+					Set<ByteBuffer> clientFiles = getFileList();
+					ArrayList<ByteBuffer> neededFiles = new ArrayList<ByteBuffer>();
+					for (Map.Entry<ByteBuffer, String> pair : serverFiles.entrySet()) {
+						if (!clientFiles.contains(pair.getKey())) {
+							neededFiles.add(pair.getKey());
+							publishProgress(pair.getValue());
+						}
+					}
+					numDesiredFiles = neededFiles.size();
+					if (numDesiredFiles == 0) {
+						publishProgress("All files up to date");
+					}	else {
+						out.write(MessageType.DIFF.getValue());
+						out.flush();
+						sendInt(numDesiredFiles);
+						for (ByteBuffer hash : neededFiles) {
+							out.write(hash.array());
+						}
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} catch (ExecutionException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		@Override
+		protected void onProgressUpdate(String... progress) {
+			addOutput(progress[0]);
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			addOutput("Done!");
+		}
+		
+	}
+	
+	private class PullTask extends AsyncTask<Void, String, Void> {
+		AsyncTask<Void, String, Void> prevTask = null;
+		
+		@Override
+		protected void onPreExecute() {
+			if (numDesiredFiles == 0) {
+				prevTask = new DiffTask().execute((Void) null);
+			} else {
+				setOutput("Pulling Files:");
+			}
+		}
+		
+		@Override
+		protected Void doInBackground(Void... params) {			
+			try {
+				if (prevTask != null) {
+					prevTask.get();
+					publishProgress("Pulling Files:");
+				}
+				if (numDesiredFiles != 0) {
+					synchronized(s) {
+						out.write(MessageType.PULL.getValue());
+						out.flush();				
+						for (int i = 0; i < numDesiredFiles; ++i) {
+							int namesize = readInt();
+							String filename = readString(namesize);
+							int filesize = readInt();
+							readFile(filename, filesize);
+							publishProgress("Downloaded " + filename);
+						}
+						numDesiredFiles = 0;
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} catch (ExecutionException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		@Override
+		protected void onProgressUpdate(String... progress) {
+			addOutput(progress[0]);
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			addOutput("Done!");
+		}
+		
+	}
+	
+	private class CapTask extends AsyncTask<Void, String, Void> {
+		AsyncTask<Void, String, Void> prevTask = null;
+		int cap;
+
+		@Override
+		protected void onPreExecute() {
+			SeekBar seekBar = (SeekBar)findViewById(R.id.cap_slider); 
+			this.cap = seekBar.getProgress();
+			if (numDesiredFiles == 0) {
+				prevTask = new DiffTask().execute((Void) null);
+			} else {
+				setOutput("Pulling Files with " + cap + " Byte Cap:");
+			}
+		}
+		
+		@Override
+		protected Void doInBackground(Void... params) {		
+			try {
+				if (prevTask != null) {
+					prevTask.get();
+					publishProgress("Pulling Files with " + cap + " Byte Cap:");
+				}
+				if (numDesiredFiles != 0) {
+					synchronized(s) {
+						out.write(MessageType.CAP.getValue());
+						out.flush();
+						
+						sendInt(cap);
+						Log.d("info", "cap size: " + cap);
+						
+						int namesize = readInt();
+						while (namesize != 0) {
+							String filename = readString(namesize);
+							int filesize = readInt();
+							Log.d("info", "filename: " + filename + " size: " + filesize);
+							readFile(filename, filesize);
+							namesize = readInt();
+							publishProgress("Downloaded " + filename);
+						}
+						numDesiredFiles = 0;
+					}
+				}
+			} catch (IOException e) {
+				e.printStackTrace();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			} catch (ExecutionException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+
+		@Override
+		protected void onProgressUpdate(String... progress) {
+			addOutput(progress[0]);
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			addOutput("Done!");
+		}
+		
+	}
+	
+	private class LeaveTask extends AsyncTask<Void, String, Void> {
+
+		@Override
+		protected void onPreExecute() {
+			setOutput("Leaving");
+		}
+		
+		@Override
+		protected Void doInBackground(Void... params) {
+	    	try {
+	    		synchronized(s) {
+		    		out.write(MessageType.LEAVE.getValue());
+					out.flush();
+		   		
+					s.close();
+	    		}
+	    	} catch (IOException e) {
+				e.printStackTrace();
+			}
+			return null;
+		}
+		
+		@Override
+		protected void onPostExecute(Void result) {
+			finish();
+		}
+		
 	}
 }
