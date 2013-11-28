@@ -45,6 +45,7 @@ public class MainActivity extends Activity {
 	private Map<ByteBuffer, String> serverFiles;
 	private int numServerFiles;
 	private int numDesiredFiles;
+	private AsyncTask<Void, String, Void> prevTask = null;
 	
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -131,23 +132,33 @@ public class MainActivity extends Activity {
 	}
 	
 	public void doList(View view) {
-		new ListTask().execute((Void) null);
+		if (prevTask == null || prevTask.getStatus() == AsyncTask.Status.FINISHED) {
+			prevTask = new ListTask().execute((Void) null);
+		}
 	}
 	
 	public void doDiff(View view) {		
-		new DiffTask().execute((Void) null);
+		if (prevTask == null || prevTask.getStatus() == AsyncTask.Status.FINISHED) {
+			prevTask = new DiffTask().execute((Void) null);
+		}
 	}
 	
 	public void doPull(View view) {
-		new PullTask().execute((Void) null);
-	}
+		if (prevTask == null || prevTask.getStatus() == AsyncTask.Status.FINISHED) {
+			prevTask = new PullTask().execute((Void) null);
+		}
+	}	
 	
 	public void doCap(View view) {
-		new CapTask().execute((Void) null);
+		if (prevTask == null || prevTask.getStatus() == AsyncTask.Status.FINISHED) {
+			prevTask = new CapTask().execute((Void) null);
+		}
 	}
 	
 	public void doLeave(View view) {
-		new LeaveTask().execute((Void) null);
+		if (prevTask == null || prevTask.getStatus() == AsyncTask.Status.FINISHED) {
+			prevTask = new LeaveTask().execute((Void) null);
+		}
 	}
 	
 	public String readString(int length) {
@@ -511,11 +522,13 @@ public class MainActivity extends Activity {
 		@Override
 		protected Void doInBackground(Void... params) {
 	    	try {
-	    		synchronized(s) {
-		    		out.write(MessageType.LEAVE.getValue());
-					out.flush();
-		   		
-					s.close();
+	    		if ( s != null ) {
+		    		synchronized(s) {
+			    		out.write(MessageType.LEAVE.getValue());
+						out.flush();
+			   		
+						s.close();
+		    		}
 	    		}
 	    	} catch (IOException e) {
 				e.printStackTrace();
